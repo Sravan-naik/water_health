@@ -156,7 +156,7 @@
 
         // Load GeoJSON from external file
         let geojsonLayer;
-        fetch('waterbodies.geojson')
+        fetch('https://github.com/Sravan-naik/water_health/blob/main/waterbodies.geojson')
             .then(response => response.json())
             .then(data => {
                 geojsonLayer = L.geoJSON(data, {
