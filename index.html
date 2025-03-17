@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waterbody Health Classification</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; }
+        #controls { margin: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Waterbody Health Classification</h2>
+    <div id="controls">
+        <label for="yearSelector">Select Year:</label>
+        <select id="yearSelector">
+            <option value="all">All Years</option>
+        </select>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        let map = L.map('map').setView([12.9716, 77.5946], 8); // Centered at Bengaluru
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let geojsonLayer;
+        let geojsonData;
+
+        fetch("your-geojson-url.geojson")
+            .then(response => response.json())
+            .then(data => {
+                geojsonData = data;
+                populateYearDropdown(data);
+                filterGeoJSON("all");
+            });
+
+        function populateYearDropdown(data) {
+            let years = new Set();
+            data.features.forEach(feature => years.add(feature.properties.year));
+            let selector = document.getElementById("yearSelector");
+            Array.from(years).sort().forEach(year => {
+                let option = document.createElement("option");
+                option.value = year;
+                option.textContent = year;
+                selector.appendChild(option);
+            });
+            selector.addEventListener("change", () => filterGeoJSON(selector.value));
+        }
+
+        function filterGeoJSON(selectedYear) {
+            if (geojsonLayer) map.removeLayer(geojsonLayer);
+
+            let filteredFeatures = selectedYear === "all" ? 
+                geojsonData.features : 
+                geojsonData.features.filter(f => f.properties.year == selectedYear);
+
+            geojsonLayer = L.geoJSON(filteredFeatures, {
+                style: feature => ({
+                    color: feature.properties.color, // Use predefined color
+                    weight: 2,
+                    fillOpacity: 0.6
+                }),
+                onEachFeature: (feature, layer) => {
+                    layer.bindPopup(getPopupContent(feature.properties));
+                    layer.on('click', () => showAllYearsInfo(feature.properties.water_body_id));
+                }
+            }).addTo(map);
+        }
+
+        function getPopupContent(props) {
+            return `<b>Waterbody ID:</b> ${props.water_body_id}<br>
+                    <b>Year:</b> ${props.year}<br>
+                    <b>Health:</b> ${props.health_class}<br>
+                    <b>Water Filling:</b> ${props.fill_percentage}%<br>
+                    <b>Water Area:</b> ${props.water_area_sqm} sqm<br>
+                    <b>Total Area:</b> ${props.total_area_sqm} sqm`;
+        }
+
+        function showAllYearsInfo(waterBodyId) {
+            let allYearsData = geojsonData.features
+                .filter(f => f.properties.water_body_id == waterBodyId)
+                .map(f => `Year ${f.properties.year}: ${f.properties.fill_percentage}% (${f.properties.health_class})`)
+                .join("<br>");
+
+            alert(`Waterbody ID: ${waterBodyId}\n\n${allYearsData}`);
+        }
+    </script>
+</body>
+</html>
