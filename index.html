@@ -28,7 +28,7 @@
         let geojsonLayer;
         let geojsonData;
 
-        fetch("your-geojson-url.geojson")
+        fetch("waterbodies.geojson")
             .then(response => response.json())
             .then(data => {
                 geojsonData = data;
