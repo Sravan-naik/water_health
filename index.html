@@ -3,89 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Waterbody Health Classification</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>Waterbody Health Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <style>
-        #map { height: 600px; }
-        #controls { margin: 10px; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+        #yearFilter {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            z-index: 1000;
+            background: white;
+            padding: 5px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
-    <h2>Waterbody Health Classification</h2>
-    <div id="controls">
-        <label for="yearSelector">Select Year:</label>
-        <select id="yearSelector">
-            <option value="all">All Years</option>
-        </select>
-    </div>
+
+    <!-- Dropdown to Select Year -->
+    <select id="yearFilter">
+        <option value="all">All Years</option>
+        <option value="2016">2016</option>
+        <option value="2017">2017</option>
+        <option value="2018">2018</option>
+        <option value="2019">2019</option>
+        <option value="2020">2020</option>
+        <option value="2021">2021</option>
+        <option value="2022">2022</option>
+        <option value="2023">2023</option>
+        <option value="2024">2024</option>
+    </select>
+
+    <!-- Map Container -->
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script>
-        let map = L.map('map').setView([12.9716, 77.5946], 8); // Centered at Bengaluru
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        var map = L.map('map').setView([12.9716, 77.5946], 10); // Bengaluru
 
-        let geojsonLayer;
-        let geojsonData;
+        // Google Satellite Map Layer
+        var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '© Google Maps'
+        }).addTo(map);
 
-        fetch("waterbodies.geojson")
-            .then(response => response.json())
-            .then(data => {
-                geojsonData = data;
-                populateYearDropdown(data);
-                filterGeoJSON("all");
-            });
+        var geojsonLayer;
 
-        function populateYearDropdown(data) {
-            let years = new Set();
-            data.features.forEach(feature => years.add(feature.properties.year));
-            let selector = document.getElementById("yearSelector");
-            Array.from(years).sort().forEach(year => {
-                let option = document.createElement("option");
-                option.value = year;
-                option.textContent = year;
-                selector.appendChild(option);
-            });
-            selector.addEventListener("change", () => filterGeoJSON(selector.value));
+        // Function to Load GeoJSON
+        function loadGeoJSON(year) {
+            fetch("https://raw.githubusercontent.com/Sravan-naik/water_health/main/waterbodies.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    if (geojsonLayer) {
+                        map.removeLayer(geojsonLayer);
+                    }
+
+                    geojsonLayer = L.geoJSON(data, {
+                        style: function (feature) {
+                            return {
+                                color: "#0000FF",
+                                weight: 1,
+                                fillColor: "#3388ff",
+                                fillOpacity: 0.5
+                            };
+                        },
+                        filter: function(feature) {
+                            return year === "all" || feature.properties.year === year;
+                        },
+                        onEachFeature: function (feature, layer) {
+                            if (feature.properties) {
+                                var popupContent = "<b>Waterbody:</b> " + feature.properties.name + "<br>" +
+                                                   "<b>Year:</b> " + feature.properties.year + "<br>" +
+                                                   "<b>Water Filling %:</b> " + feature.properties.filling_percentage + "%";
+                                layer.bindPopup(popupContent);
+                            }
+                        }
+                    }).addTo(map);
+                })
+                .catch(error => console.error("Error loading GeoJSON:", error));
         }
 
-        function filterGeoJSON(selectedYear) {
-            if (geojsonLayer) map.removeLayer(geojsonLayer);
+        // Load all years initially
+        loadGeoJSON("all");
 
-            let filteredFeatures = selectedYear === "all" ? 
-                geojsonData.features : 
-                geojsonData.features.filter(f => f.properties.year == selectedYear);
-
-            geojsonLayer = L.geoJSON(filteredFeatures, {
-                style: feature => ({
-                    color: feature.properties.color, // Use predefined color
-                    weight: 2,
-                    fillOpacity: 0.6
-                }),
-                onEachFeature: (feature, layer) => {
-                    layer.bindPopup(getPopupContent(feature.properties));
-                    layer.on('click', () => showAllYearsInfo(feature.properties.water_body_id));
-                }
-            }).addTo(map);
-        }
-
-        function getPopupContent(props) {
-            return `<b>Waterbody ID:</b> ${props.water_body_id}<br>
-                    <b>Year:</b> ${props.year}<br>
-                    <b>Health:</b> ${props.health_class}<br>
-                    <b>Water Filling:</b> ${props.fill_percentage}%<br>
-                    <b>Water Area:</b> ${props.water_area_sqm} sqm<br>
-                    <b>Total Area:</b> ${props.total_area_sqm} sqm`;
-        }
-
-        function showAllYearsInfo(waterBodyId) {
-            let allYearsData = geojsonData.features
-                .filter(f => f.properties.water_body_id == waterBodyId)
-                .map(f => `Year ${f.properties.year}: ${f.properties.fill_percentage}% (${f.properties.health_class})`)
-                .join("<br>");
-
-            alert(`Waterbody ID: ${waterBodyId}\n\n${allYearsData}`);
-        }
+        // Change Map Data Based on Year Selection
+        document.getElementById("yearFilter").addEventListener("change", function() {
+            loadGeoJSON(this.value);
+        });
     </script>
+
 </body>
 </html>
